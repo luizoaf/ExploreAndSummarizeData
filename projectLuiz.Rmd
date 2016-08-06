@@ -1,0 +1,289 @@
+---
+output: html_document
+---
+Luiz de Oliveira Alves Filho
+========================================================
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, packages}
+# Load all of the packages that you end up using
+# in your analysis in this code chunk.
+
+# Notice that the parameter "echo" was set to FALSE for this code chunk.
+# This prevents the code from displaying in the knitted HTML output.
+# You should set echo=FALSE for all code chunks in your file.
+
+require(ggplot2)
+require(PerformanceAnalytics)
+library(rpart)
+```
+
+```{r echo=FALSE, Load_the_Data}
+# Load the Data
+dados = read.csv("wineQualityReds.csv")
+dados = dados[, -which(names(dados) %in% "X")] #removendo a coluna referente à linha
+alvo = "quality" # Variável alvo que queremos analisar
+
+dados$acidez_com_ph = dados$fixed.acidity * dados$volatile.acidity * dados$pH
+```
+
+# Univariate Plots Section
+```{r echo=FALSE, Univariate_Plots}
+print("Estrutura dos dados")
+str(dados) 
+
+print("Sumário dos dados")
+summary(dados)
+largura_celula = c(0.2,0.035,0.01,0.1,0.009,0.08,0.08,0.0002,0.02,0.02,0.1,0.5,0.5)
+colunas_enviesadas_para_direita = c("free.sulfur.dioxide","total.sulfur.dioxide", "sulphates")
+
+oldw <- getOption("warn")
+options(warn = -1) # remover warnings
+
+for(coluna in 1:ncol(dados)){
+  if(names(dados)[coluna] %in% colunas_enviesadas_para_direita){ # distribuições enviesadas à direita
+    dados[,coluna] = log(dados[,coluna]) # transformação utilizando log
+  }
+  g = ggplot(dados, aes(dados[,coluna]))+
+    geom_histogram(binwidth = largura_celula[coluna]) +
+    theme(panel.background=element_blank()) + 
+    labs(y="Quantidade",x=names(dados)[coluna])
+  print(g)
+}
+options(warn = oldw)
+
+print("Quantidades e proporções das avaliações dos vinhos")
+quantidade_qualidade_do_vinho = table(dados[,alvo])
+quantidade_qualidade_do_vinho
+proporcoes_da_qualidade_do_vinho = prop.table(table(dados[,alvo]))*100
+proporcoes_da_qualidade_do_vinho
+
+
+melhores_avaliacoes = dados[dados$quality==8,]
+
+print("Melhores avaliações dos vinhos")
+summary(melhores_avaliacoes)
+
+```
+
+# Univariate Analysis
+
+### What is the structure of your dataset?
+
+Existem 1599 vinhos tinto que foram avaliados de acordo com a qualidade de seu sabor, com uma base de dados composta por 12 variáveis numéricas (fixed.acidity, volatile.acidity, citric.acid, residual.sugar, chlorides, free.sulfur.dioxide, total.sulfur.dioxide, density, pH, sulphates,alcohol e quality). Quais dessas propriedades químicas influenciam na qualidade do vinho?
+
+Ele foi avaliado entre 0 (pior) e 10 (melhor). A qualidade dele na base de dados variou entre 3, com ~0.63% dos vinhos, até 8, com ~1.12% dos vinhos. A grande maioria compreende as notas 5 e 6, com ~43% e ~40% respectivamente. Isto é, a base de dados extraída não é representativa, pois 83% de seus dados estão alocados à duas avaliações que deveriam compreender 20% do total da base.
+
+Sobre os vinhos considerados de alta qualidade (nota 8):
+
+1. A grande maioria (a partir do primeiro quartil) deles possuíram alto teor alcóolico, acima de 11.32, bem acima da maioria dos vinhos (a partir do terceiro quartil), ou seja, estão entre os 25% dos vinhos que mais possuem elevados índices de álcool.
+
+2. Possuem sulfatos maiores que a média de todos os vinhos. 
+
+3. Possuem cloretos em quantidades inferiores à média dos demais.
+
+### What is/are the main feature(s) of interest in your dataset?
+
+As variáveis que mais chamaram atenção para os melhores vinhos avaliados foram: álcool, sulfatos e cloretos. É provável que elas sejam as melhores características para a definição da qualidade dos vinhos.
+
+### What other features in the dataset do you think will help support your investigation into your feature(s) of interest?
+
+Suponho que a acidez com o ph e açúcar também tenham importância, porém, não mais que o álcool, os sulfatos e cloretos.
+
+### Did you create any new variables from existing variables in the dataset?
+
+A acidez está relacionada com o ph, então foi calculado o produto das variáveis: fixed.acidity, volatile.acidity e pH, chamada de acidez_com_ph. Certamente ela impactará diretamente no sabor do vinho.
+
+### Of the features you investigated, were there any unusual distributions? Did you perform any operations on the data to tidy, adjust, or change the form of the data? If so, why did you do this?
+
+As variáveis: free.sulfur.dioxide, total.sulfur.dioxide e sulphates possuem uma distribuição com calda enviesada à direita, utilizou-se a transformação logarítmica para corrigir esse viés. 
+
+# Bivariate Plots Section
+```{r echo=FALSE, Bivariate_Plots}
+correlacoes = cor(dados)
+correlacoes
+
+oldw <- getOption("warn")
+options(warn = -1) # remover warnings
+chart.Correlation(dados)
+options(warn = oldw)
+
+dados$quality = as.factor(dados$quality)
+
+exibe_boxplot = function(variavel_alvo, 
+                         variavel_analise, 
+                         label_x = variavel_alvo,
+                         label_y=variavel_analise,titulo=""){
+  qplot(dados[,variavel_alvo],dados[,variavel_analise] , data=dados, geom="boxplot") +  theme(panel.background=element_blank()) +
+    labs(x=label_x,y=label_y,title = titulo) +
+    geom_point(aes(color=quality),size = 3, alpha = 1/3)
+}
+
+variaveis = c("citric.acid","sulphates","alcohol","acidez_com_ph",
+              "volatile.acidity","chlorides","fixed.acidity","residual.sugar",
+              "free.sulfur.dioxide","total.sulfur.dioxide","pH","density")
+
+for( coluna in variaveis){
+  print(exibe_boxplot(alvo,coluna))
+}
+```
+
+# Bivariate Analysis
+
+### Talk about some of the relationships you observed in this part of the investigation. How did the feature(s) of interest vary with other features in the dataset?
+
+Vinhos com alto teor de citric.acid, sulphates e alcohol tendem a possuir uma melhor avaliação, porém, com acidez_com_ph, volatile.acidity e chlorides, quanto menor são, melhor foi a nota. Em todos os casos houveram uma correlação linear fraca.
+
+
+### Did you observe any interesting relationships between the other features (not the main feature(s) of interest)?
+
+o Ph com o fixed.acidity possui uma correlação linear moderada, assim como a density e a fixed.acidity. A primeira é inversamente proporcional, de valor -0.68, o que faz sentido, já que quanto maior a acidez, menos é o PH do composto químico. Já a segunda diretamente proporcional, de valor 0.67. 
+
+### What was the strongest relationship you found?
+
+Com a variável alcohol para a variável de interesse quality, encontrou-se uma correlação positiva quase moderada, de valor 0.48, se mostrando a melhor variável para explicar as avaliações dos vinhos.
+
+
+# Multivariate Plots Section
+
+```{r echo=FALSE, Multivariate_Plots}
+dados$quality = as.factor(dados$quality)
+
+for(coluna in 1:ncol(dados)){
+  if(!names(dados)[coluna] %in% alvo){
+    g = ggplot(dados, aes(dados[,coluna], colour = quality)) +
+      geom_density(alpha = 0.1) + theme(panel.background=element_blank()) +    labs(x=names(dados)[coluna])
+    print(g)
+  }
+}
+
+print("É possível observar a distribuição enviesando para a direita para o citric.acid, sulphates e alcohol.  Essa relação inverte para esquerda por meio do pH, acidez_com_ph e volatile.acidity, como já foi evidenciado anteriormente por meio dos box plots.")
+
+# alcohol, density e quality
+ggplot(dados,aes(alcohol,density)) + 
+  geom_point(aes(color=quality),size = 2, alpha = 1/3) +
+  facet_grid(quality ~ . ) + 
+  theme(panel.background=element_blank()) 
+
+# alcohol, acidez_com_ph e quality
+qplot(alcohol,acidez_com_ph , data=dados, geom="boxplot") +  theme(panel.background=element_blank()) +   facet_grid(. ~ quality ) + geom_point(aes(color=quality),size = 2, alpha = 1/3)
+
+print("Sumário: alcohol para todas as avaliações")
+aggregate(dados$alcohol,list(dados$quality),FUN=summary)
+
+print("Sumário: density para todas as avaliações")
+aggregate(dados$density,list(dados$quality),FUN=summary)
+
+print("Sumário: acidez_com_ph para todas as avaliações")
+aggregate(dados$acidez_com_ph,list(dados$quality),FUN=summary)
+
+print("Sumário: chlorides para todas as avaliações")
+aggregate(dados$chlorides,list(dados$quality),FUN=summary)
+
+# modelo de classificação - árvore de decisão
+
+set.seed(1) # tornar as avaliações aleatórias (usar sempre o mesmo exemplo), para extrair a mesma quantidade de avaliações igualmente balanceadas
+dados_para_modelo = dados[sample(1:nrow(dados),replace = F),] 
+dados_para_modelo$quality = as.numeric(as.character(dados_para_modelo$quality))
+
+# para balanceamento dos dados, escolhi a mesma quantidade de linhas da maior nota (8)
+total_elementos_por_avaliacao = nrow(dados_para_modelo[dados_para_modelo$quality== max(dados_para_modelo$quality),])
+
+# Notas acima de 3, não foi incluido o 3 devido à baixa quantidade de avaliações, irá comprometer a quantidade que já é pequena com notas 8 
+dados_para_modelo = dados_para_modelo[dados_para_modelo$quality>3,]
+
+# função utilizada para balancear os dados
+dados_balanceados = function(base_de_dados, avaliacao, total_elementos){
+  base = base_de_dados[base_de_dados$quality==avaliacao,]
+  base = base[1:total_elementos,]
+  base
+}
+
+# base de dados sendo balanceada
+balanceados = rbind(dados_balanceados(dados_para_modelo,4,total_elementos_por_avaliacao) ,dados_balanceados(dados_para_modelo,5,total_elementos_por_avaliacao))
+balanceados = rbind(balanceados,dados_balanceados(dados_para_modelo,6,total_elementos_por_avaliacao))
+balanceados = rbind(balanceados,dados_balanceados(dados_para_modelo,7,total_elementos_por_avaliacao))
+balanceados = rbind(balanceados,dados_balanceados(dados_para_modelo,8,total_elementos_por_avaliacao))
+
+
+modelo_arvore <- rpart(quality ~ ., method="class", data=balanceados)
+
+previsao_dados_baleanceados <- predict(modelo_arvore, balanceados, type="class")
+previsao_toda_a_base_de_dados_acima_de_nota_3 <- predict(modelo_arvore, dados_para_modelo, type="class")
+
+table(balanceados$quality, previsao_dados_baleanceados)
+table(dados_para_modelo$quality, previsao_toda_a_base_de_dados_acima_de_nota_3)
+
+# plot árvore
+plot(modelo_arvore, uniform=T, main="Classificação da qualidade do vinho")
+text(modelo_arvore, use.n=F, all=F, cex=.8, xpd = T)
+
+# acurácia
+acuracia_treino = sum(balanceados$quality==previsao_dados_baleanceados)/
+                      length(previsao_dados_baleanceados)*100
+acuracia_base_acima_de_avaliacao_3 = sum(as.numeric(as.character(dados_para_modelo$quality))
+                                         == previsao_toda_a_base_de_dados_acima_de_nota_3) /
+                                        length(previsao_toda_a_base_de_dados_acima_de_nota_3)*100
+
+print("Acurácia dos dados para treinamento do modelo:")
+acuracia_treino
+print("Acurácia dos dados para base de dados com todas as avaliações acima de nota 3:")
+acuracia_base_acima_de_avaliacao_3
+```
+
+# Multivariate Analysis
+
+### Talk about some of the relationships you observed in this part of the investigation. Were there features that strengthened each other in terms of looking at your feature(s) of interest?
+
+A medida que a density diminui e alcohol aumenta, as avaliações tendem a ser melhores. Já quando a acidez_com_ph aumenta e o alcohol diminue, a qualidade tende a piorar, a grande maioria dos vinhos que receberam nota 5 possuem alcohol abaixo de 11, a medida que esse teor aumenta e a acidez diminui, as avaliações vão melhorando. Reafirmando tudo que já foi encontrado até agora.
+
+### Were there any interesting or surprising interactions between features?
+
+Eu esperava que o residual.sugar possuísse importância para a definição das avaliações, mas surpreendetemente não se mostrou relevante. Porém, algumas outras informações se mostraram interessantes, a mediana do alcohol tende a aumentar com a qualidade do vinho, característica inversa quando tratado pela density, acidez_com_ph e chlorides.
+
+
+### OPTIONAL: Did you create any models with your dataset? Discuss the strengths and limitations of your model.
+
+Sim, criei uma árvore de decisão, uma de suas vantagens é a implementação simples e a possibilidade de resolver problemas de classificação. Como está desbalanceada (frequência das avaliações desproporcional que pode enviesar o modelo), defini pela quantidade de avaliações que deram nota 8. Desta maneira, foram extraídas aleatoriamente 18 avaliações para cada nota, com exceção à nota 3, por ter uma quantidade pequena de amostra, como o foco é descobrir as variáveis que auxiliam para definir um bom vinho, ela foi removida por essas razões.
+
+Foi encontrada uma acurácia de 64% para os dados de treinamento e 31% para a base de dados com avaliações acima de 3, o uso desse modelo é importante porque exibe quais variáveis foram mais importantes para a classificação das notas, o sulphates, alcohol, acidez_com_ph e chlorides foram as mais representativas. A variável sulphates superou as expectativas, pois eu acreditava que o alcohol era a variável que melhor classificaria os vinhos bons dos ruins, papel feito de forma mais eficiente pelos sulphates. 
+
+------
+
+# Final Plots and Summary
+
+### Plot One
+```{r echo=FALSE, Plot_One}
+  g = ggplot(dados, aes(as.factor(dados[,alvo])))+
+    geom_histogram(binwidth = 0.3) +
+    theme(panel.background=element_blank()) + 
+    labs(y="Quantidade de avaliações",x="Avaliação",title="Frequência das avaliações dos vinhos")
+  print(g)
+```
+
+### Description One
+Com a frequência das avaliações é possível perceber o desbalanceamento da base de dados. De avaliações entre 1 e 10, ela possui apenas 60% das notas, dessas, 83% estão alocadas para duas notas, compromentendo a análise.
+
+### Plot Two
+```{r echo=FALSE, Plot_Two}
+ print(exibe_boxplot(alvo,"alcohol","Avaliação","Teor alcoólico","Gráfico de dispersão do teor alcoólico\n de acordo com a qualidade do vinho"))
+```
+
+### Description Two
+A variável que possuiu maior correlação linear positiva com a qualidade do vinho foi o alcohol, essa tendência crescente pode ser vista pelo box plot acima.
+
+### Plot Three
+```{r echo=FALSE, Plot_Three}
+plot(modelo_arvore, uniform=T, main="Classificação da qualidade do vinho")
+text(modelo_arvore, use.n=F, all=F, cex=.8, xpd = T)
+```
+
+### Description Three
+Os dados foram balanceados e um modelo de classificação utilizando árvore de decisão foi desenvolvido, as variáveis: sulphates, alcohol, acidez_com_ph e chlorides foram as melhores para essa categorização.
+
+------
+
+# Reflection
+
+A amostra possui 1599 avaliações de vinhos, essas avaliações podem variar entre 0 a 10, porém, nessa base de dados possui apenas notas variando entre 3 e 8, ou seja, possui apenas 60% das possíveis notas. Poderia ser uma possibilidade, mas como não contém nem pelo menos um voto, pareceu problema na extração da base de dados. Outro problema é apresentado, 83% da base de dados é referente à duas notas, o que pode enviesar o modelo de classificação. Os dados foram balanceados e um modelo de árvore de decisão foi desenvolvido a fim de entender o objetivo desse estudo. Através dele, percebeu-se que os componentes químicos: sulphates, alcohol, acidez_com_ph e chlorides foram as melhores variáveis para essa avaliação de um vinho com qualidade, mas que devido ao problema da amostra, a acurácia não é eficiente, necessitando de melhorias.
+
+
